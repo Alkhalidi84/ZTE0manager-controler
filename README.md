@@ -9,6 +9,8 @@
 [![Privacy](https://img.shields.io/badge/privacy-local--only-059669)](#-privacy--security)
 [![Built with](https://img.shields.io/badge/built%20with-React%20%2B%20Capacitor-38bdf8)](#)
 
+### [![Download the Android APK](https://img.shields.io/badge/⬇%20Download-Android%20APK-16a34a?style=for-the-badge)](../../releases/latest)
+
 **English** · [🇸🇦 العربية](README.ar.md)
 
 </div>

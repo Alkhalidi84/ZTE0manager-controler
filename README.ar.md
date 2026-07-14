@@ -8,6 +8,8 @@
 [![License](https://img.shields.io/badge/license-MIT-16a34a)](#-الرخصة)
 [![Privacy](https://img.shields.io/badge/privacy-local--only-059669)](#-الخصوصية-والأمان)
 
+### [![تنزيل تطبيق أندرويد](https://img.shields.io/badge/⬇%20تنزيل-Android%20APK-16a34a?style=for-the-badge)](../../releases/latest)
+
 [🇬🇧 English](README.md) · **العربية**
 
 </div>
