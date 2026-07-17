@@ -50,6 +50,35 @@ const ALIASES = {
   nrPci: ['nr5g_pci', 'Z5g_pci'],
   nrCellId: ['Z5g_CELL_ID', 'nr5g_cell_id', 'nr_cell_id'],
   nrBw: ['nr5g_bandwidth', 'Z5g_bandwidth'],
+
+  // ===== ZTE G5B =====
+  modemTemp: ['pm_sensor_mdm', 'modem_temp'],
+  nrTemp: ['pm_modem_5g', 'nr_temp'],
+
+  lteCaInfo: [
+    'lte_multi_ca_scell_info',
+    'lte_multi_ca_scell_sig_info',
+  ],
+
+  nrCaInfo: [
+    'nr_multi_ca_scell_info',
+  ],
+
+  activeLteBand: [
+    'wan_active_band',
+  ],
+
+  activeNrBand: [
+    'nr5g_action_band',
+  ],
+
+  activeLteChannel: [
+    'wan_active_channel',
+  ],
+
+  activeNrChannel: [
+    'nr5g_action_channel',
+  ],
 } as const;
 
 /** Every command the signal engine reads (union of all aliases), deduplicated. */
