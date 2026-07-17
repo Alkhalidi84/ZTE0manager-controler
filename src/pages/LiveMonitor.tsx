@@ -67,13 +67,27 @@ export function LiveMonitor() {
         {!snap ? (
           <Spinner label={t('live.waiting')} />
         ) : (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
             <MetricTile label="LTE RSRP" metric={snap.lte.rsrp} />
             <MetricTile label="LTE SINR" metric={snap.lte.sinr} />
             <MetricTile label="LTE RSRQ" metric={snap.lte.rsrq} />
             <MetricTile label="NR RSRP" metric={snap.nr.rsrp} />
             <MetricTile label="NR SINR" metric={snap.nr.sinr} />
             <MetricTile label="NR RSRQ" metric={snap.nr.rsrq} />
+
+            <div className="rounded-lg border p-3">
+              <div className="text-xs opacity-70">Modem Temp</div>
+              <div className="text-xl font-semibold">
+                {snap.modemTemp ?? '--'}°C
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-3">
+              <div className="text-xs opacity-70">NR Temp</div>
+              <div className="text-xl font-semibold">
+                {snap.nrTemp ?? '--'}°C
+              </div>
+            </div>
           </div>
         )}
       </Card>
