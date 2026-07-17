@@ -208,6 +208,10 @@ export function buildSnapshot(raw: GoformGetResult, timestamp = Date.now()): Rad
     mcc: pickStr(raw, 'mcc'),
     mnc: pickStr(raw, 'mnc'),
     signalBars: pickNum(raw, 'signalbar'),
+
+    modemTemp: pickNum(raw, 'modemTemp'),
+    nrTemp: pickNum(raw, 'nrTemp'),
+
     lte,
     nr,
     carriers: buildCarriers(lte, nr),
