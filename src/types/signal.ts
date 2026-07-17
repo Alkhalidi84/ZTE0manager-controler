@@ -72,6 +72,11 @@ export interface RadioSnapshot {
   mcc: string | null;
   mnc: string | null;
   signalBars: number | null;
+
+  /** G5B modem temperatures (optional for routers that don't expose them). */
+  modemTemp: number | null;
+  nrTemp: number | null;
+
   lte: LteMetrics;
   nr: NrMetrics;
   carriers: CarrierComponent[];
