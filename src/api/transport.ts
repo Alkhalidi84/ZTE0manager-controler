@@ -17,6 +17,8 @@ export interface HttpResult {
   ok: boolean;
   status: number;
   text: string;
+  /** Response headers with lowercased names (HiLink chains CSRF tokens via them). */
+  headers: Record<string, string>;
 }
 
 export interface HttpRequest {
@@ -49,7 +51,11 @@ async function fetchTransport(req: HttpRequest): Promise<HttpResult> {
       credentials: 'include',
       signal: controller.signal,
     });
-    return { ok: res.ok, status: res.status, text: await res.text() };
+    const headers: Record<string, string> = {};
+    res.headers.forEach((value, key) => {
+      headers[key.toLowerCase()] = value;
+    });
+    return { ok: res.ok, status: res.status, text: await res.text(), headers };
   } finally {
     clearTimeout(timer);
     req.signal?.removeEventListener('abort', onAbort);
@@ -73,12 +79,31 @@ async function nativeTransport(req: HttpRequest): Promise<HttpResult> {
     readTimeout: req.timeoutMs,
   });
   const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data ?? '');
-  return { ok: res.status >= 200 && res.status < 400, status: res.status, text };
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(res.headers ?? {})) {
+    headers[key.toLowerCase()] = String(value);
+  }
+  return { ok: res.status >= 200 && res.status < 400, status: res.status, text, headers };
 }
 
 export function httpRequest(req: HttpRequest): Promise<HttpResult> {
   return isNativePlatform() ? nativeTransport(req) : fetchTransport(req);
 }
 
-/** Default router address used on native (no proxy) — editable in Settings. */
-export const DEFAULT_ROUTER_URL = 'http://192.168.8.1';
+/**
+ * Default router address used on native (no proxy) — editable in Settings.
+ * This is a ZTE manager first, so the ZTE factory IP is the default; connect()
+ * auto-probes the other candidates when nothing answers here.
+ */
+export const DEFAULT_ROUTER_URL = 'http://192.168.0.1';
+
+/**
+ * Addresses tried in order by router auto-discovery when the configured one
+ * doesn't answer: ZTE factory (192.168.0.1), Huawei HiLink factory
+ * (192.168.8.1), then the common home-gateway fallback (192.168.1.1).
+ */
+export const CANDIDATE_ROUTER_URLS = [
+  'http://192.168.0.1',
+  'http://192.168.8.1',
+  'http://192.168.1.1',
+] as const;

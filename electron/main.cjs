@@ -22,7 +22,10 @@ const path = require('path');
 const { URL } = require('url');
 
 const DIST_DIR = path.join(__dirname, '..', 'dist');
-const DEFAULT_HOST = process.env.ZTE_ROUTER_HOST || 'http://192.168.8.1';
+// ZTE factory IP first — this is a ZTE manager. Auto-discovery (below) probes
+// the other candidates when nothing answers here, so Huawei users still work.
+const DEFAULT_HOST = process.env.ZTE_ROUTER_HOST || 'http://192.168.0.1';
+const CANDIDATE_HOSTS = ['http://192.168.0.1', 'http://192.168.8.1', 'http://192.168.1.1'];
 // ZTE firmware paths + Huawei HiLink paths (5G CPE 5 / H155-383 serves its UI
 // from /lib, /res, ... and its XML API from /api — all must stay same-origin).
 const PROXY_PREFIXES = [
@@ -34,6 +37,9 @@ const ROUTER_MOUNT = '/__router'; // exposes the router's own root (login page)
 let mainWindow = null;
 let serverPort = 0;
 let routerHost = DEFAULT_HOST;
+// 'user' = explicitly set via the Router menu (never auto-overridden);
+// 'auto' = default/discovered — discovery may adjust it when it stops answering.
+let routerHostSource = 'auto';
 
 // --- config persistence ------------------------------------------------------
 
@@ -47,6 +53,9 @@ function loadConfig() {
     const cfg = JSON.parse(raw);
     if (cfg && typeof cfg.routerHost === 'string' && cfg.routerHost) {
       routerHost = normalizeHost(cfg.routerHost);
+      // Configs written before `source` existed only ever came from the
+      // "Set Router IP" prompt — treat them as user-chosen.
+      routerHostSource = cfg.source === 'auto' ? 'auto' : 'user';
     }
   } catch {
     /* first run — use default */
@@ -56,9 +65,89 @@ function loadConfig() {
 function saveConfig() {
   try {
     fs.mkdirSync(path.dirname(configPath()), { recursive: true });
-    fs.writeFileSync(configPath(), JSON.stringify({ routerHost }, null, 2));
+    fs.writeFileSync(
+      configPath(),
+      JSON.stringify({ routerHost, source: routerHostSource }, null, 2),
+    );
   } catch (err) {
     console.error('Failed to save config:', err);
+  }
+}
+
+// --- router auto-discovery ---------------------------------------------------
+
+/** GET a small body from `${host}${pathname}` with a hard timeout. */
+function probeHttp(host, pathname, timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    let target;
+    try {
+      target = new URL(pathname, host);
+    } catch {
+      resolve(null);
+      return;
+    }
+    const mod = target.protocol === 'https:' ? https : http;
+    const req = mod.get(
+      target,
+      { rejectUnauthorized: false, headers: { referer: `${host}/index.html`, origin: host } },
+      (res) => {
+        let body = '';
+        res.on('data', (chunk) => {
+          body += chunk;
+          if (body.length > 8192) req.destroy();
+        });
+        res.on('end', () => resolve({ status: res.statusCode || 0, body }));
+      },
+    );
+    req.setTimeout(timeoutMs, () => req.destroy());
+    req.on('error', () => resolve(null));
+  });
+}
+
+async function speaksRouterProtocol(host) {
+  // ZTE: the goform GET endpoint answers JSON. Nothing else does.
+  const zte = await probeHttp(host, '/goform/goform_get_cmd_process?isTest=false&cmd=model_name');
+  if (zte && zte.status === 200) {
+    try {
+      JSON.parse(zte.body);
+      return true;
+    } catch {
+      /* not ZTE */
+    }
+  }
+  // Huawei HiLink: XML <response> on /api.
+  const hilink = await probeHttp(host, '/api/device/basic_information');
+  return !!(hilink && hilink.status === 200 && /<response>/i.test(hilink.body));
+}
+
+let discovering = false;
+let lastDiscoveryAt = 0;
+
+/**
+ * Find a live router among the candidates and adopt it. Runs at startup and
+ * whenever the proxy fails to reach the configured host — but never overrides
+ * an address the user set explicitly, and never more than once per 15 s.
+ */
+async function discoverRouterHost() {
+  if (routerHostSource === 'user') return;
+  if (discovering || Date.now() - lastDiscoveryAt < 15000) return;
+  discovering = true;
+  lastDiscoveryAt = Date.now();
+  try {
+    const candidates = [routerHost, ...CANDIDATE_HOSTS.filter((h) => h !== routerHost)];
+    for (const host of candidates) {
+      if (await speaksRouterProtocol(host)) {
+        if (host !== routerHost) {
+          routerHost = host;
+          saveConfig();
+          buildMenu();
+          console.log(`Router auto-discovered at ${host}`);
+        }
+        return;
+      }
+    }
+  } finally {
+    discovering = false;
   }
 }
 
@@ -162,6 +251,9 @@ function proxyToRouter(req, res, rewrittenPath) {
   proxyReq.on('error', (err) => {
     if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'text/plain' });
     res.end(`Router proxy error: ${err.message}\nRouter: ${routerHost}`);
+    // The configured host is not answering — maybe the router lives on another
+    // factory address. Kick off (throttled) discovery so the next poll works.
+    discoverRouterHost().catch(() => {});
   });
   req.pipe(proxyReq);
 }
@@ -308,6 +400,7 @@ async function promptRouterIp() {
   const { ipcMain } = require('electron');
   const onSubmit = (_e, value) => {
     routerHost = normalizeHost(value);
+    routerHostSource = 'user';
     saveConfig();
     buildMenu();
     cleanup();
@@ -371,7 +464,7 @@ function buildMenu() {
         },
         {
           label: 'Project docs',
-          click: () => shell.openExternal('https://github.com/'),
+          click: () => shell.openExternal('https://github.com/NawafFai/ZTE0manager-controler'),
         },
       ],
     },
@@ -392,6 +485,8 @@ app.whenReady().then(async () => {
   }
   buildMenu();
   createMainWindow();
+  // First launch (or auto config): make sure we're pointed at a live router.
+  discoverRouterHost().catch(() => {});
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();

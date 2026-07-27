@@ -46,6 +46,76 @@ describe('end-to-end against a simulated ZTE router', () => {
     expect(good.code).toBe('0');
   });
 
+  it('never hammers a rejected password into the firmware lockout', async () => {
+    router = await startMockRouter();
+    const client = new GoformClient({ baseUrl: router.url });
+
+    const bad = await login(client, 'wrong-password');
+    expect(bad.ok).toBe(false);
+    expect(bad.code).toBe('3');
+    // Flag + LD are present → the reject is authoritative: exactly ONE attempt.
+    expect(router.received.filter((r) => r.goformId === 'LOGIN')).toHaveLength(1);
+  });
+
+  it('logs in on legacy firmware (Base64 password, no RD/LD commands)', async () => {
+    router = await startMockRouter({}, { legacy: true });
+    const client = new GoformClient({ baseUrl: router.url });
+
+    const good = await login(client, MOCK_PASSWORD);
+    expect(good.ok).toBe(true);
+    expect(good.code).toBe('0');
+
+    const attempts = router.received.filter((r) => r.goformId === 'LOGIN');
+    expect(attempts).toHaveLength(1); // Base64 chosen up front from the absent flag
+    // No RD command on this firmware → the post must go out unsigned…
+    expect(attempts[0]!.params.AD).toBeUndefined();
+    expect(attempts[0]!.params.RD).toBeUndefined();
+    // …with the legacy Base64 password encoding.
+    expect(attempts[0]!.params.password).toBe(
+      Buffer.from(MOCK_PASSWORD, 'utf8').toString('base64'),
+    );
+  });
+
+  it('legacy wrong password fails with a single attempt (no useless fallback)', async () => {
+    router = await startMockRouter({}, { legacy: true });
+    const client = new GoformClient({ baseUrl: router.url });
+
+    const bad = await login(client, 'wrong-password');
+    expect(bad.ok).toBe(false);
+    expect(bad.code).toBe('1');
+    // No LD salt exists → the SHA-256 fallback is pointless and must be skipped.
+    expect(router.received.filter((r) => r.goformId === 'LOGIN')).toHaveLength(1);
+  });
+
+  it('detects SHA-256 from the LD salt when the flag is hidden (live-reference behavior)', async () => {
+    // The REAL MC801A1 answers WEB_ATTR_IF_SUPPORT_SHA256 = "" before login
+    // (verified live) — the LD salt's presence must select SHA-256 directly,
+    // in a single attempt, or every login would feed the lockout counter.
+    router = await startMockRouter({ WEB_ATTR_IF_SUPPORT_SHA256: '' });
+    const client = new GoformClient({ baseUrl: router.url });
+
+    const good = await login(client, MOCK_PASSWORD);
+    expect(good.ok).toBe(true);
+    expect(good.code).toBe('0');
+    expect(router.received.filter((r) => r.goformId === 'LOGIN')).toHaveLength(1);
+  });
+
+  it('spends at most ONE Base64 fallback per session when the scheme is heuristic', async () => {
+    // Contrived firmware: serves an LD-like salt (→ SHA-256 chosen
+    // heuristically) but actually wants the legacy Base64 password.
+    router = await startMockRouter({ LD: 'STATICSALT' }, { legacy: true });
+    const client = new GoformClient({ baseUrl: router.url });
+
+    const good = await login(client, MOCK_PASSWORD);
+    expect(good.ok).toBe(true); // rescued by the single Base64 fallback
+    expect(router.received.filter((r) => r.goformId === 'LOGIN')).toHaveLength(2);
+
+    // The working scheme is remembered — the next login is a single attempt.
+    const again = await login(client, MOCK_PASSWORD);
+    expect(again.ok).toBe(true);
+    expect(router.received.filter((r) => r.goformId === 'LOGIN')).toHaveLength(3);
+  });
+
   it('reads device identity', async () => {
     router = await startMockRouter();
     const client = new GoformClient({ baseUrl: router.url });

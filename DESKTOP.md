@@ -19,9 +19,11 @@ it there — it is self-contained.
 
 ## First-time setup
 
-1. Launch the app.
-2. Menu **Router → Set Router IP…** — enter your router address if it isn't the
-   default `http://192.168.0.1` (STC MC801A1 uses `192.168.0.1`).
+1. Launch the app. It defaults to `http://192.168.0.1` (ZTE factory) and
+   auto-discovers the router if it lives elsewhere (`192.168.8.1` Huawei,
+   `192.168.1.1`) — an address you set yourself is never overridden.
+2. Menu **Router → Set Router IP…** — only needed if your router uses an
+   address outside those candidates.
 3. Menu **Router → Login to Router…** — this opens your router's own login page
    inside the app (same origin), so after you log in the session is shared with
    the manager. Close that window when done.

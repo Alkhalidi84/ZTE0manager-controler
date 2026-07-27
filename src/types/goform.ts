@@ -34,6 +34,13 @@ export interface SetCommandRequest {
   params?: Record<string, string | number>;
   /** When false, skip attaching the RD/AD CSRF tokens (rarely needed). */
   authenticated?: boolean;
+  /**
+   * Token policy for authenticated posts. 'require' (default) fails the call
+   * when the RD nonce cannot be read; 'try' attaches RD/AD when available but
+   * still sends the post without them otherwise — needed for LOGIN, because
+   * older ZTE firmwares have no RD command at all.
+   */
+  tokens?: 'require' | 'try';
   /** When false, do NOT retry on a `{"result":"failure"}` (used for probing). */
   retry?: boolean;
 }

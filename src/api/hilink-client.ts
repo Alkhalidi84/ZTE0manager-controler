@@ -6,6 +6,7 @@ import {
   type SetCommandRequest,
 } from '@/types';
 import { GoformClient, type GoformClientConfig, type GoformTrafficEvent } from './goform-client';
+import { httpRequest } from './transport';
 import { HiLinkApiError, buildHiLinkRequest, parseHiLinkXml } from './hilink-xml';
 import { randomHexNonce, scramClientProof } from './hilink-crypto';
 import { hiLinkToCommands, isHiLinkLoggedIn, type HiLinkState } from './hilink-map';
@@ -36,9 +37,12 @@ import {
  *     (band/cell locks) reports failure, and the plugin's capabilities hide
  *     those controls anyway.
  *
- * Transport is plain same-origin fetch: in Electron/dev the local proxy
- * forwards `/api` to the router, shares the SessionID cookie, and passes the
- * __RequestVerificationToken response headers through untouched.
+ * Transport goes through the shared platform layer (src/api/transport.ts):
+ * on web/Electron that is same-origin fetch behind the local proxy (which
+ * forwards `/api`, shares the SessionID cookie and passes the
+ * __RequestVerificationToken headers through); on Android/iOS it is
+ * CapacitorHttp straight to the router — a browser fetch there would be
+ * killed by mixed-content/CORS before it ever left the WebView.
  */
 
 /**
@@ -338,7 +342,7 @@ export class HiLinkClient extends GoformClient {
       // The firmware rotates the token on every POST and returns the next one
       // (or a #-separated batch after login) in the response header. Chained
       // POSTs (challenge → authentication) MUST use this header token.
-      const next = res.headers.get('__RequestVerificationToken');
+      const next = res.headers['__requestverificationtoken'];
       if (next) this.csrfToken = next.split('#')[0] ?? null;
       else this.csrfToken = null; // force a fresh token before the next POST
 
@@ -370,32 +374,27 @@ export class HiLinkClient extends GoformClient {
     path: string,
     body?: string,
     headers?: Record<string, string>,
-  ): Promise<{ status: number; text: string; headers: Headers }> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.apiTimeoutMs);
+  ): Promise<{ status: number; text: string; headers: Record<string, string> }> {
     try {
-      const res = await fetch(`${this.apiBase}${path}`, {
+      const res = await httpRequest({
         method,
+        url: `${this.apiBase}${path}`,
         headers: { 'X-Requested-With': 'XMLHttpRequest', ...(headers ?? {}) },
         body,
-        credentials: 'include',
-        signal: controller.signal,
+        timeoutMs: this.apiTimeoutMs,
       });
-      const text = await res.text();
       if (!res.ok) {
         throw new GoformError(`HiLink ${method} failed (${res.status})`, {
           endpoint: path,
           status: res.status,
         });
       }
-      return { status: res.status, text, headers: res.headers };
+      return { status: res.status, text: res.text, headers: res.headers };
     } catch (err) {
       if (err instanceof GoformError || err instanceof HiLinkApiError) throw err;
       throw new GoformError(err instanceof Error ? err.message : 'Network error', {
         endpoint: path,
       });
-    } finally {
-      clearTimeout(timer);
     }
   }
 

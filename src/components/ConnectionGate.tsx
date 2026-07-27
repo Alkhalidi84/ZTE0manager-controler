@@ -1,24 +1,44 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useConnectionStore, useCredentialsStore } from '@/store';
+import { isNativePlatform, DEFAULT_ROUTER_URL } from '@/api/transport';
 import { Card, Spinner } from '@/components/ui/primitives';
 import { Icon } from '@/components/ui/Icon';
 import { loginErrorMessage } from '@/services';
 import { useT } from '@/i18n';
 
+const isElectron = () =>
+  typeof navigator !== 'undefined' && navigator.userAgent.includes('Electron');
+
 /**
  * Gate for pages that need an authenticated router session. Performs a native
  * SHA-256 login so the session lives in the app's own request context (this is
  * what makes signal reads + band/cell locks work). Supports "remember me".
+ *
+ * The gate is also the connection surface: it auto-connects on mount, shows
+ * the live connection status, and — when the router cannot be reached — says
+ * exactly that (with a way to fix the address) instead of a misleading
+ * "Login failed".
  */
 export function ConnectionGate({ children }: { children: ReactNode }) {
-  const { status, loggedIn, login } = useConnectionStore();
+  const { status, error: connError, loggedIn, login, connect, baseUrl, setBaseUrl } =
+    useConnectionStore();
   const creds = useCredentialsStore();
   const t = useT();
+  const native = isNativePlatform();
   const [password, setPassword] = useState(creds.remember ? creds.password : '');
+  const [address, setAddress] = useState(baseUrl || (native ? DEFAULT_ROUTER_URL : ''));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Try to reach the router as soon as the gate appears — the user should see
+  // a live status, not a dead password box.
+  useEffect(() => {
+    if (useConnectionStore.getState().status === 'disconnected') void connect();
+  }, [connect]);
+
   if (status === 'connected' && loggedIn) return <>{children}</>;
+
+  const unreachable = status === 'error';
 
   const submit = async () => {
     setBusy(true);
@@ -27,6 +47,8 @@ export function ConnectionGate({ children }: { children: ReactNode }) {
       const result = await login(password);
       if (result.ok) {
         if (creds.remember) creds.save(password);
+      } else if (result.code === 'unreachable') {
+        setError(t('gate.unreachable'));
       } else {
         setError(loginErrorMessage(result.code));
       }
@@ -37,10 +59,55 @@ export function ConnectionGate({ children }: { children: ReactNode }) {
     }
   };
 
+  const retryConnect = async () => {
+    if (native) setBaseUrl(address.trim());
+    setError(null);
+    await connect();
+  };
+
   return (
     <div className="mx-auto max-w-lg pt-10">
       <Card title={t('gate.title')}>
         <p className="text-sm text-content-muted">{t('gate.body')}</p>
+
+        <div className="mt-3 flex items-center gap-2 text-sm">
+          <span
+            className={`h-2 w-2 shrink-0 rounded-full ${
+              status === 'connected'
+                ? 'bg-good'
+                : status === 'connecting'
+                  ? 'bg-warn'
+                  : 'bg-bad'
+            }`}
+          />
+          <span className="text-content-muted">{t(`status.${status}`)}</span>
+        </div>
+
+        {unreachable && (
+          <div className="mt-3 rounded-lg border border-warn/40 bg-warn/10 p-3 text-sm">
+            <p className="font-medium">{t('gate.unreachable')}</p>
+            {connError && <p className="mt-1 break-all text-xs text-content-muted">{connError}</p>}
+            {native ? (
+              <>
+                <label className="label mt-3">{t('gate.address')}</label>
+                <input
+                  className="input font-mono"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder={DEFAULT_ROUTER_URL}
+                  inputMode="url"
+                />
+              </>
+            ) : (
+              <p className="mt-2 text-xs text-content-muted">
+                {isElectron() ? t('gate.desktopHint') : t('gate.webHint')}
+              </p>
+            )}
+            <button className="btn-ghost mt-3" onClick={retryConnect}>
+              <Icon name="plug" /> {t('gate.retry')}
+            </button>
+          </div>
+        )}
 
         <label className="label mt-4">{t('gate.password')}</label>
         <input
@@ -66,9 +133,9 @@ export function ConnectionGate({ children }: { children: ReactNode }) {
         </label>
         <p className="mt-1 text-xs text-content-muted">{t('gate.rememberHint')}</p>
 
-        {busy && (
+        {(busy || status === 'connecting') && (
           <div className="mt-4">
-            <Spinner label={t('gate.loggingIn')} />
+            <Spinner label={busy ? t('gate.loggingIn') : t('gate.connecting')} />
           </div>
         )}
         {error && (

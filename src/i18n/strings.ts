@@ -51,6 +51,12 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     'gate.loginFailed': 'Login failed — check the password',
     'gate.remember': 'Remember me (auto-login)',
     'gate.rememberHint': 'Saves the password on this device only. Uncheck to forget it.',
+    'gate.unreachable':
+      'Could not reach the router — make sure this device is on the router\'s Wi-Fi/network. The app auto-tries 192.168.0.1, 192.168.8.1 and 192.168.1.1.',
+    'gate.address': 'Router address',
+    'gate.retry': 'Retry connection',
+    'gate.desktopHint': 'Wrong address? Use the "Router → Set Router IP…" menu at the top of the window.',
+    'gate.webHint': 'Dev server: set VITE_ROUTER_HOST in .env to your router address and restart.',
 
     'live.title': 'Live radio monitor',
     'live.waiting': 'Waiting for first sample…',
@@ -239,6 +245,12 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     'gate.loginFailed': 'فشل تسجيل الدخول — تأكد من الباسورد',
     'gate.remember': 'تذكّرني (دخول تلقائي)',
     'gate.rememberHint': 'يحفظ الباسورد على جهازك فقط. ألغِ التحديد لنسيانه.',
+    'gate.unreachable':
+      'تعذّر الوصول للراوتر — تأكد أن جهازك متصل بشبكة الراوتر (الواي فاي). التطبيق يجرّب تلقائياً 192.168.0.1 و192.168.8.1 و192.168.1.1.',
+    'gate.address': 'عنوان الراوتر',
+    'gate.retry': 'إعادة محاولة الاتصال',
+    'gate.desktopHint': 'العنوان غلط؟ استخدم قائمة "Router → Set Router IP…" أعلى النافذة.',
+    'gate.webHint': 'خادم التطوير: حدّد VITE_ROUTER_HOST في ملف ‎.env بعنوان الراوتر ثم أعد التشغيل.',
 
     'live.title': 'المراقبة الحية للراديو',
     'live.waiting': 'بانتظار أول قراءة…',

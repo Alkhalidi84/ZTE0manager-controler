@@ -222,6 +222,21 @@ retry disabled, so the panic path stays fast on firmwares without the command.
   - Login result codes: `0`/`4` = success, `1` = login fail, `2` = duplicateUser
     (another session active), `3` = badPassword, `5` = not logged in.
   - Only one admin session at a time → `2` means log out the other session first.
+- **Legacy login (older ZTE firmwares):** `WEB_ATTR_IF_SUPPORT_SHA256` is
+  absent/`0`, there is **no `RD`/`LD` command at all**, and the password is sent
+  as **`Base64(rawPassword)`** (still `goformId=LOGIN`). Wrong password answers
+  `1` (some builds answer a plain `failure`).
+- **Scheme detection (verified on the LIVE reference MC801A1, 2026-07-27):**
+  before login, `cmd=WEB_ATTR_IF_SUPPORT_SHA256` returns `""` **even on SHA-256
+  firmware** (no lowercase/alias variant answers either) — the flag is only
+  meaningful when non-empty. The reliable pre-login discriminator is
+  **`cmd=LD` itself**: SHA-256 firmware answers a 64-hex uppercase salt, legacy
+  firmware answers `""`. Consequences for any client:
+  - decide by LD presence (flag `0` still forces Base64);
+  - LOGIN must be sent with *best-effort* RD/AD (unsigned when RD is absent);
+  - never auto-retry a rejected LOGIN — consecutive failures feed the
+    firmware's failed-attempt lockout counter (at most one scheme-fallback
+    attempt per session).
 
 ---
 

@@ -40,9 +40,20 @@ export interface MockRouter {
   close: () => Promise<void>;
 }
 
+export interface MockRouterOptions {
+  /**
+   * Emulate a legacy ZTE firmware: no RD/AD signing, no LD salt, no
+   * WEB_ATTR_IF_SUPPORT_SHA256 flag — login expects `password = Base64(raw)`
+   * and answers "1" on a wrong password.
+   */
+  legacy?: boolean;
+}
+
 export async function startMockRouter(
   overrides: Record<string, string> = {},
+  options: MockRouterOptions = {},
 ): Promise<MockRouter> {
+  const legacy = options.legacy ?? false;
   let lastRd = '';
   let lastLd = '';
   const received: MockRequest[] = [];
@@ -89,6 +100,8 @@ export async function startMockRouter(
     ppp_status: 'ipv4_ipv6_connected',
     sys_uptime: '123456',
     pm_modem_temp: '42',
+    // Modern firmware declares SHA-256 login support (reference value: '2').
+    WEB_ATTR_IF_SUPPORT_SHA256: legacy ? '' : '2',
     ...overrides,
   };
 
@@ -99,13 +112,14 @@ export async function startMockRouter(
       const cmds = (u.searchParams.get('cmd') ?? '').split(',').filter(Boolean);
       const out: Record<string, string> = {};
       for (const cmd of cmds) {
-        if (cmd === 'RD') {
+        if (cmd === 'RD' && !legacy) {
           lastRd = md5(`${Math.random()}-${Date.now()}`).slice(0, 16);
           out.RD = lastRd;
-        } else if (cmd === 'LD') {
+        } else if (cmd === 'LD' && !legacy) {
           lastLd = sha256(`${Math.random()}-${Date.now()}`).toUpperCase();
           out.LD = lastLd;
         } else {
+          // Legacy firmware has no RD/LD commands → empty, like any unknown cmd.
           out[cmd] = values[cmd] ?? '';
         }
       }
@@ -127,11 +141,17 @@ export async function startMockRouter(
 
         received.push({ goformId, params: Object.fromEntries(p), authOk });
 
-        // Emulate SHA-256 login: password = SHA256(SHA256(pw) + LD), UPPERCASE hex.
         if (goformId === 'LOGIN') {
+          res.setHeader('Content-Type', 'application/json');
+          if (legacy) {
+            // Legacy login: password = Base64(raw); wrong password answers "1".
+            const expected = Buffer.from(MOCK_PASSWORD, 'utf8').toString('base64');
+            res.end(JSON.stringify({ result: p.get('password') === expected ? '0' : '1' }));
+            return;
+          }
+          // Modern login: password = SHA256(SHA256(pw) + LD), UPPERCASE hex.
           const shaU = (x: string) => sha256(x).toUpperCase();
           const expected = shaU(shaU(MOCK_PASSWORD) + lastLd);
-          res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ result: p.get('password') === expected ? '0' : '3' }));
           return;
         }

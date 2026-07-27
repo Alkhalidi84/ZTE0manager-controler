@@ -77,6 +77,23 @@ export class GoformClient {
     this.versionCache = null;
   }
 
+  /**
+   * Cheap protocol probe used by router auto-discovery: does this host answer
+   * the goform GET endpoint with JSON? Only ZTE firmware does — any other web
+   * server 404s or returns HTML, which fails JSON parsing.
+   */
+  static async probe(baseUrl: string, timeoutMs = 4_000): Promise<boolean> {
+    try {
+      const client = new GoformClient({ baseUrl, timeoutMs });
+      await client.get({
+        cmd: ['model_name', 'wa_inner_version', 'modem_main_state', 'signalbar'],
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** Read one or more commands. Returns the raw string map from the firmware. */
   async get(request: GetCommandRequest): Promise<GoformGetResult> {
     const cmds = Array.isArray(request.cmd) ? request.cmd : [request.cmd];
@@ -170,9 +187,15 @@ export class GoformClient {
     }
 
     if (authenticated) {
-      const { rd, ad } = await this.buildTokens();
-      body.set('AD', ad);
-      body.set('RD', rd);
+      try {
+        const { rd, ad } = await this.buildTokens();
+        body.set('AD', ad);
+        body.set('RD', rd);
+      } catch (err) {
+        // 'try' = best-effort signing (LOGIN): older firmwares have no RD
+        // command, and login there must simply go out unsigned.
+        if ((request.tokens ?? 'require') !== 'try') throw err;
+      }
     }
 
     const url = `${this.baseUrl}${GOFORM_SET_ENDPOINT}`;

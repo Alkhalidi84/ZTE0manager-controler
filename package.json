@@ -1,7 +1,7 @@
 {
   "name": "zte-router-manager",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Advanced open-source manager for the hidden HTTP API of ZTE 5G routers (MC801A, MC888, MC889, MC8020, ...).",
   "type": "module",
   "license": "MIT",
@@ -24,7 +24,8 @@
     "mobile:sync": "npm run build && cap sync",
     "mobile:android": "npm run build && cap sync android && cap open android",
     "mobile:ios": "npm run build && cap sync ios && cap open ios",
-    "apk:debug": "npm run build && cap add android && cd android && gradlew.bat assembleDebug"
+    "apk:debug": "npm run build && cap add android && node scripts/patch-android.mjs && cd android && gradlew.bat assembleDebug",
+    "patch:native": "node scripts/patch-android.mjs"
   },
   "dependencies": {
     "@capacitor/core": "^6.2.1",
