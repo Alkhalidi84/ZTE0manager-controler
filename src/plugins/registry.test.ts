@@ -22,6 +22,14 @@ describe('plugin detection', () => {
     expect(detectPlugin(device('MC888 Pro')).id).toBe('mc888');
   });
 
+  it('matches ZTE G5B via model prefix', () => {
+    expect(detectPlugin(device('G5B')).id).toBe('g5b');
+  });
+
+  it('matches ZTE G5B via hardware version when model is absent', () => {
+    expect(detectPlugin(device('', 'G5BHWV1.0.0')).id).toBe('g5b');
+  });
+
   it('falls back to generic for unknown models', () => {
     expect(detectPlugin(device('MC9999X')).id).toBe('generic-zte');
   });
@@ -32,5 +40,9 @@ describe('plugin detection', () => {
 
   it('resolves an auth strategy for the router', () => {
     expect(resolveRouter(device('MC801A1')).authStrategy.id).toBe('classic-zte');
+  });
+
+  it('resolves the classic-zte auth strategy for G5B', () => {
+    expect(resolveRouter(device('G5B')).authStrategy.id).toBe('classic-zte');
   });
 });
