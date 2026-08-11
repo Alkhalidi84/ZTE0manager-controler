@@ -147,6 +147,13 @@ export class GoformClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
 
+  /**
+   * Keep the selected authentication strategy.
+   *
+   * The strategy is used as the authoritative/default hash-family hint
+   * when it exposes one. Firmware detection remains the fallback because
+   * the G5B stock WebUI has been observed directly using SHA-256 AD.
+   */
   private authStrategy: AuthStrategy;
 
   private readonly onTraffic:
@@ -195,6 +202,47 @@ export class GoformClient {
   ): void {
     this.authStrategy = strategy;
     this.versionCache = null;
+  }
+
+  /**
+   * Determine whether the currently selected auth strategy explicitly
+   * requests SHA-256.
+   *
+   * The project has historically used classicZteAuth as the default
+   * strategy. Some strategy implementations may expose a hash mode;
+   * firmware detection remains authoritative for known hardware such
+   * as G5B.
+   */
+  private getStrategyHashMode(): AdHashMode | null {
+    const strategy = this.authStrategy as unknown as Record<
+      string,
+      unknown
+    >;
+
+    const candidates = [
+      strategy.adHashMode,
+      strategy.hashMode,
+      strategy.mode,
+    ];
+
+    for (const value of candidates) {
+      if (typeof value !== 'string') continue;
+
+      const normalized = value.trim().toLowerCase();
+
+      if (
+        normalized === 'sha256' ||
+        normalized === 'sha-256'
+      ) {
+        return 'sha256';
+      }
+
+      if (normalized === 'md5') {
+        return 'md5';
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -267,10 +315,8 @@ export class GoformClient {
           {
             endpoint:
               GOFORM_GET_ENDPOINT,
-
             command:
               cmds.join(','),
-
             status:
               res.status,
           },
@@ -286,31 +332,23 @@ export class GoformClient {
 
       this.emit({
         method: 'GET',
-
         endpoint:
           GOFORM_GET_ENDPOINT,
-
         label:
           cmds.join(','),
-
         params: {
           cmd: cmds.join(','),
-
           ...(multi
             ? { multi_data: '1' }
             : {}),
         },
-
         durationMs:
           Math.round(
             performance.now() - started,
           ),
-
         ok: true,
-
         status:
           res.status,
-
         responsePreview:
           JSON.stringify(data).slice(
             0,
@@ -322,24 +360,18 @@ export class GoformClient {
     } catch (err) {
       this.emit({
         method: 'GET',
-
         endpoint:
           GOFORM_GET_ENDPOINT,
-
         label:
           cmds.join(','),
-
         params: {
           cmd: cmds.join(','),
         },
-
         durationMs:
           Math.round(
             performance.now() - started,
           ),
-
         ok: false,
-
         error:
           err instanceof Error
             ? err.message
@@ -365,7 +397,7 @@ export class GoformClient {
   /**
    * Send an authenticated action.
    *
-   * The important G5B behavior is:
+   * Important G5B behavior:
    *
    * 1. Load wa_inner_version + cr_version.
    * 2. Read a fresh RD.
@@ -506,15 +538,12 @@ export class GoformClient {
           url,
           {
             method: 'POST',
-
             headers: {
               'Content-Type':
                 'application/x-www-form-urlencoded',
-
               Accept:
                 'application/json',
             },
-
             body:
               body.toString(),
           },
@@ -526,10 +555,8 @@ export class GoformClient {
           {
             endpoint:
               GOFORM_SET_ENDPOINT,
-
             goformId:
               request.goformId,
-
             status:
               res.status,
           },
@@ -545,26 +572,19 @@ export class GoformClient {
 
       this.emit({
         method: 'POST',
-
         endpoint:
           GOFORM_SET_ENDPOINT,
-
         label:
           request.goformId,
-
         params:
           loggedParams,
-
         durationMs:
           Math.round(
             performance.now() - started,
           ),
-
         ok: true,
-
         status:
           res.status,
-
         responsePreview:
           JSON.stringify(data).slice(
             0,
@@ -576,23 +596,17 @@ export class GoformClient {
     } catch (err) {
       this.emit({
         method: 'POST',
-
         endpoint:
           GOFORM_SET_ENDPOINT,
-
         label:
           request.goformId,
-
         params:
           loggedParams,
-
         durationMs:
           Math.round(
             performance.now() - started,
           ),
-
         ok: false,
-
         error:
           err instanceof Error
             ? err.message
@@ -624,7 +638,7 @@ export class GoformClient {
 
     /**
      * RD must be the final GET immediately
-     * before BAND_SELECT.
+     * before BAND_SELECT or another authenticated POST.
      */
     const rd =
       await this.getValue('RD');
@@ -635,18 +649,32 @@ export class GoformClient {
         {
           endpoint:
             GOFORM_GET_ENDPOINT,
-
           command:
             'RD',
         },
       );
     }
 
-    const mode =
+    /**
+     * Firmware detection is the primary mechanism because
+     * G5B was directly observed using a 64-character AD.
+     *
+     * If a custom AuthStrategy explicitly provides a hash mode,
+     * use it unless this is a known SHA-256 family.
+     */
+    const detectedMode =
       getAdHashMode(
         waInnerVersion,
         crVersion,
       );
+
+    const strategyMode =
+      this.getStrategyHashMode();
+
+    const mode: AdHashMode =
+      detectedMode === 'sha256'
+        ? 'sha256'
+        : strategyMode ?? detectedMode;
 
     /**
      * Use the router-family-specific hash
@@ -694,7 +722,6 @@ export class GoformClient {
     const versions = {
       waInnerVersion:
         result.wa_inner_version ?? '',
-
       crVersion:
         result.cr_version ?? '',
     };
@@ -722,17 +749,13 @@ export class GoformClient {
           (init.method as
             | 'GET'
             | 'POST') ?? 'GET',
-
         url,
-
         headers:
           init.headers as
             | Record<string, string>
             | undefined,
-
         body:
           init.body,
-
         timeoutMs:
           this.timeoutMs,
       });
@@ -741,7 +764,6 @@ export class GoformClient {
         err instanceof Error
           ? err.message
           : 'Network error',
-
         {
           endpoint:
             url,
@@ -771,9 +793,7 @@ export class GoformClient {
         'Response was not valid JSON',
         {
           endpoint,
-
           command,
-
           body:
             res.text.slice(
               0,
