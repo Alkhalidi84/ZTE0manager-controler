@@ -56,10 +56,30 @@ export const mc8020Plugin: RouterPlugin = {
   capabilities: fullCapabilities,
 };
 
+/** ZTE G5B — Livewire UK G5B / G5BHWV1.0.0. */
+export const g5bPlugin: RouterPlugin = {
+  id: 'g5b',
+  name: 'ZTE G5B',
+  models: ['G5B'],
+  authStrategyId: 'classic-zte',
+  capabilities: () => ({
+    ...fullCapabilities(),
+    // Verified from the G5B browser management script:
+    // LTE cell lock is supported via LTE_LOCK_CELL_SET.
+    // NR cell lock has not been verified yet.
+    nrCellLock: false,
+    // Tower scan is not yet verified on this firmware.
+    towerScan: false,
+    // Thermal control has not yet been verified on this firmware.
+    thermalControl: false,
+  }),
+};
+
 export const MODEL_PLUGINS: readonly RouterPlugin[] = [
   mc801aPlugin,
   mc888Plugin,
   mc889Plugin,
   mc8020Plugin,
+  g5bPlugin,
   huaweiH155Plugin,
 ];
