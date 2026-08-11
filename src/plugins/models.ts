@@ -62,15 +62,47 @@ export const g5bPlugin: RouterPlugin = {
   name: 'ZTE G5B',
   models: ['G5B'],
   authStrategyId: 'classic-zte',
+  bandConfig: {
+    // Verified from the G5B browser management script.
+    lteAutoMask: 0xA3E2AB0908DFn,
+
+    // Verified G5B NR allow-all/Auto band list.
+    nrAutoBands: [
+      1,
+      2,
+      3,
+      5,
+      7,
+      8,
+      20,
+      28,
+      38,
+      41,
+      50,
+      51,
+      66,
+      70,
+      71,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+    ],
+  },
   capabilities: () => ({
     ...fullCapabilities(),
-    // Verified from the G5B browser management script:
-    // LTE cell lock is supported via LTE_LOCK_CELL_SET.
-    // NR cell lock has not been verified yet.
+    // LTE cell lock is verified through LTE_LOCK_CELL_SET.
     nrCellLock: false,
-    // Tower scan is not yet verified on this firmware.
+    // Not verified on the G5B firmware yet.
     towerScan: false,
-    // Thermal control has not yet been verified on this firmware.
+    // Not verified on the G5B firmware yet.
     thermalControl: false,
   }),
 };
